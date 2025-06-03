@@ -9,6 +9,7 @@ import cv2
 import base64
 import io
 from game_net_v1 import GameNetV1
+import json
 
 def transform_image(img_bytes):
 
@@ -127,34 +128,30 @@ def hsv_classify_image(image_bytes, vg_threshold=0.95, real_threshold=0.07):
     else:
         return None  # Uncertain - let other methods decide
 
-def sexual_prediction(image_path):
-    sexual_model = TFSMLayer('/content/gdrive/MyDrive/mobilenet_v2_140_224', call_endpoint='serving_default')
+def sexual_prediction(image_bytes):
+    sexual_model = TFSMLayer(os.getcwd() + '/mobilenet_v2_140_224', call_endpoint='serving_default')
 
     labels = ["drawings", "hentai", "neutral", "porn", "sexy"]
 
-    def preprocess_image(image_path):
-        img = load_img(image_path, target_size=(224, 224))
+    def preprocess_image(img_bytes):
+        img = load_img(io.BytesIO(img_bytes), target_size=(224, 224))
         img_array = img_to_array(img) / 255.0
         img_array = np.expand_dims(img_array, axis=0)
         return img_array
 
-    image = preprocess_image(image_path)
+    image = preprocess_image(image_bytes)
 
     output = sexual_model(image)
 
     probabilities = output['prediction'].numpy()[0]
 
-    results = dict(zip(labels, probabilities))
+    results = {}
+    for i in range(len(labels)):
+       results[labels[i]] = str(probabilities[i])
 
-    print("Class probability distribution:")
-    for label, probability in results.items():
+    return results
 
-        print(f"{label}: {probability:.4f}")
-
-    predicted_class = labels[np.argmax(probabilities)]
-    print(f"\nPredicted class: {predicted_class}")
-
-def predict(model, image, return_proba):
+def predict(model, image):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.eval().to(device)
 
@@ -162,14 +159,9 @@ def predict(model, image, return_proba):
         if torch.cuda.is_available():
             image = image.cuda()
         pred = model(image.unsqueeze(0)).squeeze()
-        prob = torch.sigmoid(pred)
-        if return_proba:
-          return prob
-        final_prediction = (prob >= 0.55).float()
-
-    return final_prediction
+        return torch.sigmoid(pred).float().item()
    
-def final_prediction(image_bytes, return_proba=False):
+def final_prediction(image_bytes, thresh = 0.55):
   
   # transform image
   image_bytes = base64.b64decode(image_bytes)
@@ -185,9 +177,15 @@ def final_prediction(image_bytes, return_proba=False):
   if hsv_result is not None:
       return hsv_result
 
-  final_prediction = predict(model, image, return_proba)
-  ## TODO check whether we want sexual prediction here
-  return final_prediction.item()
+  pred_json = {"predicted_class" : "real", "screenshot_probability" : 0.0, "real_probability": 0.0, "sexual" : None}
+  prob = predict(model, image)
+  pred_json["screenshot_probability"] = str(prob)
+  pred_json["real_probability"] = str(1 - prob)
+  if prob >= thresh:
+    pred_json["predicted_class"] = "screenshot"
+    pred_json["sexual"] = sexual_prediction(image_bytes)
+
+  return json.dumps(pred_json)
 
 # model, train_losses, avg_train_losses, test_losses, avg_test_losses = run_training(hp_base, VGG, "model_DenseNet161_1_NM")
 model = GameNetV1()
