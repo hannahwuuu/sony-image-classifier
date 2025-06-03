@@ -10,6 +10,7 @@ import base64
 import io
 from game_net_v1 import GameNetV1
 import json
+from flask import Flask, request, jsonify
 
 def transform_image(img_bytes):
 
@@ -122,9 +123,9 @@ def hsv_classify_image(image_bytes, vg_threshold=0.95, real_threshold=0.07):
 
     # Make classification based on thresholds
     if confidence >= vg_threshold:
-        return 1  # Video game
+        return 1, confidence  # Video game
     elif confidence <= real_threshold:
-        return 0  # Real-life
+        return 0, confidence  # Real-life
     else:
         return None  # Uncertain - let other methods decide
 
@@ -161,8 +162,7 @@ def predict(model, image):
         pred = model(image.unsqueeze(0)).squeeze()
         return torch.sigmoid(pred).float().item()
    
-def final_prediction(image_bytes, thresh = 0.55):
-  
+def final_prediction(image_bytes, thresh):
   # transform image
   image_bytes = base64.b64decode(image_bytes)
   image = transform_image(image_bytes)
@@ -175,17 +175,17 @@ def final_prediction(image_bytes, thresh = 0.55):
 
   hsv_result = hsv_classify_image(image_bytes)
   if hsv_result is not None:
-      return hsv_result
+    prob = hsv_result[1]
+  else:
+    prob = predict(model, image)
 
   pred_json = {"predicted_class" : "real", "screenshot_probability" : 0.0, "real_probability": 0.0, "sexual" : None}
-  prob = predict(model, image)
   pred_json["screenshot_probability"] = str(prob)
   pred_json["real_probability"] = str(1 - prob)
   if prob >= thresh:
     pred_json["predicted_class"] = "screenshot"
     pred_json["sexual"] = sexual_prediction(image_bytes)
-
-  return json.dumps(pred_json)
+  return jsonify(pred_json)
 
 # model, train_losses, avg_train_losses, test_losses, avg_test_losses = run_training(hp_base, VGG, "model_DenseNet161_1_NM")
 model = GameNetV1()
@@ -194,9 +194,28 @@ if torch.cuda.is_available():
 else:
    model.load_state_dict(torch.load(os.getcwd() + "/mobile-net-v3-GAMENET700K-epochs-3-BS-512-LR-1e-3.pt", map_location=torch.device('cpu')))
 
-screenshot_img_path = os.getcwd() + "/ScreenshotTest.png"
+app = Flask(__name__)
 
-with open(screenshot_img_path, "rb") as img_file:
-    base64_string = base64.b64encode(img_file.read())
+@app.route("/predict", methods=["POST"])
+def predict_service():
+  data = request.get_json()
+  if "image" in data:
+    image_bytes = data["image"]
+  else:
+    return jsonify({"error": "Invalid image format"})
+  
+  if "threshold" in data:
+    thresh = int(data["threshold"])
+  else:
+    thresh = 0.55
+  return final_prediction(image_bytes, thresh)
 
-print(final_prediction(base64_string))
+if __name__ == "__main__":
+    import sys
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else 5000
+    app.run(host="0.0.0.0", port=port)
+
+# screenshot_img_path = os.getcwd() + "/ScreenshotTest.png"
+# with open(screenshot_img_path, "rb") as img_file:
+#     base64_string = base64.b64encode(img_file.read())
+# print(final_prediction(base64_string, 0.55))
