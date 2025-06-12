@@ -214,8 +214,3 @@ if __name__ == "__main__":
     import sys
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 5000
     app.run(host="0.0.0.0", port=port)
-
-# screenshot_img_path = os.getcwd() + "/ScreenshotTest.png"
-# with open(screenshot_img_path, "rb") as img_file:
-#     base64_string = base64.b64encode(img_file.read())
-# print(final_prediction(base64_string, 0.55))

@@ -1,0 +1,9 @@
+setup.py
+sony_angels_torch_trainer_single_node_single_gpu_static.egg-info/PKG-INFO
+sony_angels_torch_trainer_single_node_single_gpu_static.egg-info/SOURCES.txt
+sony_angels_torch_trainer_single_node_single_gpu_static.egg-info/dependency_links.txt
+sony_angels_torch_trainer_single_node_single_gpu_static.egg-info/top_level.txt
+trainer/__init__.py
+trainer/game_net_v1.py
+trainer/game_net_v2.py
+trainer/task.py

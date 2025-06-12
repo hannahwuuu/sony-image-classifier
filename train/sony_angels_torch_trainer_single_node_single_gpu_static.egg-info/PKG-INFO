@@ -1,0 +1,4 @@
+Metadata-Version: 2.1
+Name: sony_angels_torch_trainer_single_node_single_gpu_static
+Version: 0.1
+Summary: Sony Angels Torch Trainer using a Single Node with a Single GPU preloading all the images.
